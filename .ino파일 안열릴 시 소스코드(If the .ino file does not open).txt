@@ -1,0 +1,120 @@
+#include <SoftwareSerial.h> //블루투스 
+#include <Wire.h>  //LCD모니터
+#include <LiquidCrystal_I2C.h> //LCD모니터
+LiquidCrystal_I2C lcd(0x27, 16, 2); //LCD모니터
+SoftwareSerial BTSerial(4, 5); //블루투스 4,5번 핀 사용
+
+#define EN1 9
+#define EN2 8
+int i=0; //for문에 들어가는 i 변수 선언
+int count = 0; //주차공간 번호
+void setup() {
+  pinMode(EN1,OUTPUT); //L298N을 통해 모터 제어
+  pinMode(EN2,OUTPUT); //L298N을 통해 모터 제어
+  Serial.begin(9600);
+  BTSerial.begin(9600);
+  pinMode(6, OUTPUT); // 레이저A
+  digitalWrite(6, HIGH); //레이저A는 항상 켜져 있음.
+  pinMode(3, OUTPUT); // 레이저B
+  lcd.init(); //LCD모니터 초기화
+  lcd.backlight(); //LCD모니터 백라이트 켜기
+}
+
+void loop() {
+  int raiser_A = analogRead(A0); //조도센서 값을 raiser_A 라는 변수에 넣어줌.
+  ///////////////////////////
+  // EN1  EN2 // 모터 방향  //
+  ///////////////////////////
+  // HIGH LOW  > Forward   //
+  // LOW  HIGH > Reverse   //
+  // HIGH HIGH > Motor Stop//
+  // LOW  LOW  > Motor Stop//
+  ///////////////////////////
+  if(raiser_A > 150){ //조도센서에 레이저A가 안들어올 때
+    digitalWrite(EN1, HIGH);   //  모터가 (HIGH,HIGH)일 때 멈춤
+    digitalWrite(EN2, HIGH);   
+    Serial.println("STOP!! by raiser A");
+    delay(200);
+    if(count == 0 ) {
+      lcd.print("The parking lot "); //The parking lot 4 is arrived. 라고 LCD모니터에 출력.
+      lcd.setCursor(0,1);
+      lcd.print(count+4); //1,2,3,4번으로 칸을 만들기 위해서. (즉, 0대신 4를 출력하기 위해서)
+      lcd.print(" is arrived.");
+      lcd.setCursor(0,0);
+    }
+    if(count == 1 ) {
+      lcd.print("The parking lot "); //The parking lot 1 is arrived. 라고 LCD모니터에 출력.
+      lcd.setCursor(0,1);
+      lcd.print(count);
+      lcd.print(" is arrived.");
+      lcd.setCursor(0,0);
+    }
+    if(count == 2 ) {
+      lcd.print("The parking lot "); //The parking lot 2 is arrived. 라고 LCD모니터에 출력.
+      lcd.setCursor(0,1);
+      lcd.print(count);
+      lcd.print(" is arrived.");
+      lcd.setCursor(0,0);
+    }
+    if(count == 3 ) { 
+      lcd.print("The parking lot "); //The parking lot 3 is arrived. 라고 LCD모니터에 출력.
+      lcd.setCursor(0,1);
+      lcd.print(count);
+      lcd.print(" is arrived.");
+      lcd.setCursor(0,0);
+    }
+  }
+  else { //조도센서에 레이저A가 들어올 때
+    digitalWrite(EN1, HIGH);   //  모터가 (HIGH,LOW)일 때 회전
+    digitalWrite(EN2, LOW); 
+    Serial.println("GO!! by raiser A");
+    delay(200);
+  }
+  
+  if (BTSerial.available()){
+    char data = BTSerial.read(); // 블루투스를 통해 입력받음.
+
+    if (data == '1') { // 블루투스를 통해 1이라는 값을 입력받으면 레이저B가 켜짐.
+      Serial.println("raiser B ON");
+      digitalWrite(3, HIGH); // 레이저 B 켜짐.
+       
+      lcd.clear(); //LCD에 출력된 문자열 지움.
+      lcd.print("The parking lot ");
+      lcd.setCursor(0,1); //count+1 is coming. 을 아랫줄로 세팅.
+      lcd.print(count+1); //사용자에게 주차공간의 번호를 1,2,3,4로 보여지게 하기 위해 count+1을 함.
+      lcd.print(" is coming.");
+      lcd.setCursor(0,0); //The parking lot 을 윗줄로 세팅.
+      count++;
+      count = count % 4; //칸 4개이기 때문에 각 주차공간이 0,1,2,3의 값을 갖도록 설정.     
+      
+      
+      for(i = 0; i<12; i++) { // 레이저A가 가려지는 동안 레이저B로 주차타워를 통제함.
+        
+        int raiser_B = analogRead(A0); //조도센서 값을 raiser_B 라는 변수에 넣어줌.
+        
+        if(raiser_B > 150){ //조도센서에 레이저B가 안들어올 때
+          digitalWrite(EN1, HIGH);   //  모터가 (HIGH,HIGH)일 때 멈춤
+          digitalWrite(EN2, HIGH);   
+          Serial.println("STOP!! by raiser B");
+        }
+        else { //조도센서에 레이저B가 들어올 때
+          digitalWrite(EN1, HIGH);   //  모터가 (HIGH,LOW)일 때 회전
+          digitalWrite(EN2, LOW); 
+        }
+      delay(500); //레이저B를 6 초동안 0.5초 간격으로 조도센서에 빛 들어오는지 체크함.
+      }
+    digitalWrite(3, LOW); //레이저 B 꺼짐.
+    }
+  }
+  delay(500);
+}
+
+//////////////////////////
+////프로그램 실행과정 요약////
+//1. 레이저A와 B의 방향은 조도센서를 향해 있음. 레이저A가 항상 켜져있음. 조도센서에 레이저 빛이 들어오면 모터가 작동함.
+//2. 레이저B는 블루투스와 연결되어 있음.
+//3. 주차공간에 의해 조도센서에 들어오는 레이저A의 빛이 가리게 되면 모터가 멈춤.
+//4. 블루투스를 통해 사용자에게 입력을 받아, 레이저B를 작동시켜 모터가 다시 돌게끔 함.
+//LCD모니터에는 주차공간이 coming일 때와 arrived일 때의 경우를 나누어 출력함.
+//coming일 땐 0,1,2,3의 값에 +1을 해줌으로써 사용자에게 1,2,3,4번의 주차공간으로 보여지게 함.
+//arrived일 땐 4로 나눈 나머지값들 중 0에는 4를 넣어 사용자에게 1,2,3,4번의 주차공간으로 보여지게 함.
